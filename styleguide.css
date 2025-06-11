@@ -1,0 +1,23 @@
+:root {
+  --section-font-family: "Ubuntu", Helvetica;
+  --section-font-weight: 700;
+  --section-font-size: 14px;
+  --section-letter-spacing: 0px;
+  --section-line-height: normal;
+  --section-font-style: normal;
+  --label-font-family: "Ubuntu", Helvetica;
+  --label-font-weight: 700;
+  --label-font-size: 10px;
+  --label-letter-spacing: 0px;
+  --label-line-height: 12px;
+  --label-font-style: normal;
+  --data-font-family: "Ubuntu", Helvetica;
+  --data-font-weight: 400;
+  --data-font-size: 10px;
+  --data-letter-spacing: 0px;
+  --data-line-height: 12px;
+  --data-font-style: normal;
+  --variable-collection-black: rgba(0, 0, 0, 1);
+  --variable-collection-primary: rgba(0, 121, 255, 1);
+  --variable-collection-white: rgba(255, 255, 255, 1);
+}

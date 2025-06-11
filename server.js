@@ -3,6 +3,7 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const cors = require('cors');
+const path = require('path');     // Import Node.js Path module
 
 const app = express();
 const PORT = 3001;
@@ -21,9 +22,10 @@ async function startBrowser() {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--single-process', // Importante para ambientes de servidor com recursos limitados
+        '--single-process',
         '--disable-gpu'
-      ]
+      ],
+      protocolTimeout: 90000 // Aumenta o timeout do protocolo para 90 segundos (90000 ms)
     });
     console.log('Puppeteer browser instance launched successfully.');
   } catch (error) {
@@ -35,10 +37,15 @@ async function startBrowser() {
 // Use o middleware CORS
 app.use(cors());
 
+// --- NOVIDADE AQUI ---
+// Serve os arquivos estáticos (HTML, CSS, Imagens, etc.) do diretório atual.
+// Isso permite que o Puppeteer acesse 'index.html', 'globals.css', 'img/image-2.png', etc.
+app.use(express.static(path.join(__dirname)));
+// --- FIM DA NOVIDADE ---
+
 // Define o endpoint para geração de PDF
 app.get('/generate-pdf', async (req, res) => {
   if (!browserInstance) {
-    // Se, por algum motivo, a instância do navegador não estiver disponível, tenta reiniciar
     console.warn('Browser instance not found. Attempting to restart.');
     await startBrowser();
     if (!browserInstance) {
@@ -51,99 +58,17 @@ app.get('/generate-pdf', async (req, res) => {
     // Cria uma nova página (aba) na instância do navegador existente
     page = await browserInstance.newPage();
 
-    // Define o conteúdo HTML para a página. Este HTML pode ser dinâmico.
-    await page.setContent(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Documento A4 Gerado</title>
-          <style>
-              body {
-                  font-family: 'Inter', sans-serif;
-                  margin: 0;
-                  padding: 2cm;
-                  font-size: 12pt;
-                  color: #333;
-                  line-height: 1.6;
-              }
-              h1 {
-                  color: #2c3e50;
-                  text-align: center;
-                  margin-bottom: 1cm;
-                  font-size: 24pt;
-              }
-              p {
-                  margin-bottom: 0.5cm;
-              }
-              .footer {
-                  position: fixed;
-                  bottom: 1cm;
-                  left: 2cm;
-                  right: 2cm;
-                  text-align: center;
-                  font-size: 10pt;
-                  color: #7f8c8d;
-              }
-              .page-break {
-                  page-break-after: always;
-              }
-              .rounded-box {
-                  border: 1px solid #ddd;
-                  border-radius: 8px;
-                  padding: 15px;
-                  margin-bottom: 20px;
-                  background-color: #f9f9f9;
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-              }
-              h2 {
-                  font-size: 18pt;
-                  color: #34495e;
-                  margin-top: 1.5cm;
-                  margin-bottom: 0.8cm;
-              }
-          </style>
-      </head>
-      <body>
-          <h1>Documento A4 Gerado Dinamicamente</h1>
-          <div class="rounded-box">
-            <p>
-                Este documento foi gerado em <strong>${new Date().toLocaleDateString()}</strong> às <strong>${new Date().toLocaleTimeString()}</strong>
-                utilizando Node.js Express e uma instância reutilizada do Puppeteer.
-            </p>
-            <p>
-                A reutilização da instância do navegador é uma otimização crucial para
-                servidores que precisam gerar muitos PDFs, pois evita o custo de inicialização
-                completa do navegador para cada requisição.
-            </p>
-            <p>
-                O importante é que, após a geração do PDF, a página (aba) seja fechada para
-                liberar seus recursos de memória, prevenindo assim vazamentos de memória.
-            </p>
-          </div>
-
-          <div class="page-break"></div>
-
-          <h2>Seção Adicional</h2>
-          <p>
-            Esta é uma seção de exemplo que aparece em uma nova página, demonstrando a
-            capacidade de controlar as quebras de página via CSS.
-          </p>
-          <ul>
-            <li>Exemplo de item de lista 1.</li>
-            <li>Exemplo de item de lista 2.</li>
-            <li>Exemplo de item de lista 3.</li>
-          </ul>
-
-          <div class="footer">
-            Página <span class="pageNumber"></span>
-          </div>
-      </body>
-      </html>
-    `, {
-      waitUntil: 'networkidle0'
+    // --- NOVIDADE AQUI ---
+    // Em vez de setContent, navegamos para a URL local do arquivo index.html.
+    // Como o Express está servindo arquivos estáticos, o Puppeteer pode carregá-lo.
+    // Isso é crucial para que os arquivos CSS e de imagem com caminhos relativos sejam carregados.
+    const localUrl = `http://localhost:${PORT}/index.html`; // Usa a porta definida no servidor
+    console.log(`Navigating Puppeteer to: ${localUrl}`);
+    await page.goto(localUrl, {
+      waitUntil: 'networkidle0', // Espera até que a rede esteja inativa (recursos carregados)
+      timeout: 60000 // Aumenta o timeout de navegação para 60 segundos
     });
+    // --- FIM DA NOVIDADE ---
 
     // Gera o PDF a partir da página renderizada.
     const pdfBuffer = await page.pdf({
@@ -168,7 +93,6 @@ app.get('/generate-pdf', async (req, res) => {
     console.error('Erro ao gerar PDF:', error);
     res.status(500).send('Erro ao gerar PDF');
   } finally {
-    // É CRUCIAL FECHAR A PÁGINA APÓS CADA REQUISIÇÃO PARA EVITAR VAZAMENTOS DE MEMÓRIA!
     if (page) {
       await page.close();
       console.log('Page closed to release resources.');
